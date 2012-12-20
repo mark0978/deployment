@@ -39,7 +39,7 @@ out somewhere on the ``PYTHONPATH``::
 Verifying Installation
 ----------------------
 
-The easiest way to ensure that you have successfully installed ``django-axes``
+The easiest way to ensure that you have successfully installed ``django-deployment``
 is to execute a command such as::
 
     python -c "import deployment; print deployment.get_version()"
