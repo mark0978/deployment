@@ -1,11 +1,11 @@
-<VirtualHost *:80>
-    ServerAdmin {{ settings.ADMINS|slice:":1" }}}}
+{% load deployment_tags %}<VirtualHost *:80>
+    ServerAdmin {{ options.server_admin }}
 
 	ServerName {{ options.servername }}
 
-        Alias /robots.txt  {{ settings.STATIC_ROOT }}/robots.txt
-        Alias /favicon.ico {{ settings.STATIC_ROOT }}/favicon.ico
-        Alias {{ settings.STATIC_URL }}      {{ settings.STATIC_ROOT }}/static/
+        Alias /robots.txt  {{ settings.STATIC_ROOT|flipslash }}/robots.txt
+        Alias /favicon.ico {{ settings.STATIC_ROOT|flipslash }}/favicon.ico
+        Alias {{ settings.STATIC_URL }}      {{ settings.STATIC_ROOT|flipslash }}
 
         # Possible values include: debug, info, notice, warn, error, crit, alert, emerg.
         LogLevel info
@@ -16,7 +16,7 @@
 
         WSGIDaemonProcess {{ options.prefix }} user={{ username }} processes={{ options.processes }} threads={{ options.threads}}
         WSGIProcessGroup  {{ options.prefix }}
-        WSGIScriptAlias   / {{ wsgi_path }}
+        WSGIScriptAlias   / {{ wsgi_path|flipslash }}
 
 </VirtualHost>
 

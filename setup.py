@@ -6,7 +6,7 @@ import deployment
 
 setup(
     name='django-deployment',
-    version=axes.get_version(),
+    version=deployment.get_version(),
     description="Create the correct files to support deployment under apache.",
     long_description=open('README.rst', 'r').read(),
     keywords='django, security, authentication',
