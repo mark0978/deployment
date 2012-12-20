@@ -5,10 +5,12 @@ from django.template import loader, Context
 from optparse import make_option
 from django.conf import settings
 
+PROJECT_NAME = settings.SETTINGS_MODULE.split('.')[0]
+
 class Command(BaseCommand):
     option_list = BaseCommand.option_list + (
         make_option('--prefix',
-                    default=settings.SETTINGS_MODULE.split('.')[0],
+                    default=PROJECT_NAME,
                     dest="prefix",
                     help='First part of the deployment file names'),
         make_option('--webserver',
@@ -27,12 +29,30 @@ class Command(BaseCommand):
                     default=5,
                     dest="threads",
                     help='Number of threads per process'),
+        make_option('--server_name',
+                    default=PROJECT_NAME,
+                    dest="server_name",
+                    help='The name of the host for virtual host setups'),
         )
     help = ("Creates deployment files for a mod_wsgi platform based on"
             " templates in the deployment templates folder.")
 
 
     def handle(self, *args, **options):
+
+        # Flesh out options with the name=value pairs from the command line
+        for arg in args:
+            if "=" in arg:
+                name, value = arg.split('=')
+                if name in options:
+                    oldvalue = options[name]
+                    if isinstance(oldvalue, list):
+                        oldvalue.append(value)
+                    else:
+                        options[name] = [oldvalue, value]
+                else:
+                    options[name] = [value]
+            # ignore those that don't have an equal in the string
 
         def deploypath(*pathparts):
             """ Create the deployment path from the PROJECT root and the passed in parts """
@@ -58,3 +78,5 @@ class Command(BaseCommand):
         with open(wsgi_path, "wt") as f:
             f.write(wsgitemplate.render(context))
             print "Wrote wsgi script in %s" % wsgi_path
+
+        print options
