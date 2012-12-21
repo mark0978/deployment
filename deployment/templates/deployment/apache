@@ -7,7 +7,7 @@
 
         Alias /robots.txt  {{ settings.STATIC_ROOT|flipslash }}/robots.txt
         Alias /favicon.ico {{ settings.STATIC_ROOT|flipslash }}/favicon.ico
-        Alias {{ settings.STATIC_URL }}      {{ settings.STATIC_ROOT|flipslash }}
+        Alias {{ settings.STATIC_URL }}      {{ settings.STATIC_ROOT|flipslash }}/
 
         <FilesMatch "{{ settings.STATIC_URL}}.*\.(ico|pdf|flv|jpe?g|png|gif|js|css|swf)$">
             ExpiresActive On
