@@ -11,8 +11,8 @@ from django.core.handlers.wsgi import WSGIHandler
 #setup the environment for Django and Pinax
 #pinax.env.setup_environ(__file__, settings_path=os.path.abspath(os.path.join()
 
-{% if options.servername %}
-os.environ["DJANGO_HOSTNAME"] = {{ options.servername }}.split('.')[0]
+{% if options.server_name %}
+os.environ["DJANGO_HOSTNAME"] = '{{ options.server_name }}'.split('.')[0]
 {% endif %}
 os.environ["DJANGO_SETTINGS_MODULE"] = '{{ settings.SETTINGS_MODULE }}'
 
