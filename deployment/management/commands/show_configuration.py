@@ -7,6 +7,7 @@ from django.conf import settings
 PROJECT_NAME = settings.SETTINGS_MODULE.split('.')[0]
 
 class Command(BaseCommand):
+    requires_model_validation = False
     option_list = BaseCommand.option_list + (
         make_option('--only',
                     default=False,
