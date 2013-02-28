@@ -1,7 +1,7 @@
-import os, sys
+{% load deployment_tags %}import os, sys
 
 sys.path = [
-{% for part in sys.path %}    "{{ part }}",
+{% for part in sys.path %}    "{{ part|flipslash }}",
 {% endfor %}
 ]
 

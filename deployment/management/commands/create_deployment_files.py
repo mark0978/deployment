@@ -16,7 +16,7 @@ class Command(BaseCommand):
         make_option('--webserver',
                     default="apache",
                     dest="webserver",
-                    help='Which webserver to create deployment files for'),
+                    help='Which webserver to create deployment files for [apache|nginx], defaults to apache'),
         make_option('--server_admin',
                     default=settings.ADMINS[0][1],
                     dest="server_admin",
@@ -24,18 +24,18 @@ class Command(BaseCommand):
         make_option('--processes',
                     default=5,
                     dest="processes",
-                    help='Number of processes to run'),
+                    help='Number of processes to run, ignored for windows'),
         make_option('--threads',
                     default=5,
                     dest="threads",
-                    help='Number of threads per process'),
+                    help='Number of threads per process, ignored for windows'),
         make_option('--server_name',
                     default=PROJECT_NAME,
                     dest="server_name",
                     help='The name of the host for virtual host setups'),
         )
-    help = ("Creates deployment files for a mod_wsgi platform based on"
-            " templates in the deployment templates folder.")
+    help = ("\nCreates deployment files for a mod_wsgi platform based on"
+            " templates in the deployment templates folder.\n")
 
 
     def handle(self, *args, **options):
@@ -79,4 +79,4 @@ class Command(BaseCommand):
             f.write(wsgitemplate.render(context))
             print "Wrote wsgi script in %s" % wsgi_path
 
-        print options
+        #print options
