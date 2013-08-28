@@ -9,18 +9,18 @@ PROJECT_NAME = settings.SETTINGS_MODULE.split('.')[0]
 
 class Command(BaseCommand):
     option_list = BaseCommand.option_list + (
-        make_option('--prefix',
+        make_option('--file-prefix',
                     default=PROJECT_NAME,
                     dest="prefix",
-                    help='First part of the deployment file names'),
+                    help='First part of the deployment file names, {prefix}_{webserver}.vhost and {prefix}_wsgi.py'),
         make_option('--webserver',
                     default="apache",
                     dest="webserver",
-                    help='Which webserver to create deployment files for'),
-        make_option('--server_admin',
+                    help='Which webserver to create deployment files for, [apache or nginx]'),
+        make_option('--server-admin',
                     default=settings.ADMINS[0][1],
                     dest="server_admin",
-                    help='Email address of the server admin'),
+                    help='Email address of the server admin for the vhost file'),
         make_option('--processes',
                     default=5,
                     dest="processes",
@@ -29,10 +29,15 @@ class Command(BaseCommand):
                     default=5,
                     dest="threads",
                     help='Number of threads per process'),
-        make_option('--server_name',
-                    default=PROJECT_NAME,
+        make_option('--server-name',
+                    default=None,
                     dest="server_name",
-                    help='The name of the host for virtual host setups'),
+                    help="Don't use this with Django >1.4, settings.ALLOWED_HOSTS will be automatically used."\
+                        "For older versions, the name of the host for virtual host setups"),
+        make_option('--output-dir',
+                    default=None,
+                    dest="output_dir",
+                    help="Name of the directory to write the deployment files in."),
         )
     help = ("Creates deployment files for a mod_wsgi platform based on"
             " templates in the deployment templates folder.")
@@ -54,16 +59,20 @@ class Command(BaseCommand):
                     options[name] = [value]
             # ignore those that don't have an equal in the string
 
-        def deploypath(*pathparts):
-            """ Create the deployment path from the PROJECT root and the passed in parts """
-            return os.path.abspath(os.path.join(settings.PROJECT_ROOT,
-                                                "deploy", *pathparts))
+        # Not done in the options, so I can put the abspath on it
+        output_dir = options["output_dir"]
+        if output_dir:
+            output_dir = os.path.abspath(output_dir)
+        else:
+            output_dir = os.path.abspath(os.path.join(settings.PROJECT_ROOT, "deploy"))
 
-        wsgi_path = deploypath("%s_wsgi.py" % options['prefix'])
-        server_path = deploypath("%s_%s" % (options['prefix'], options['webserver']))
+        wsgi_path = os.path.join(output_dir, "%s_wsgi.py" % options['prefix'])
+        server_path = os.path.join(output_dir, "%s_%s.vhost" % (options['prefix'], options['webserver']))
 
-        servertemplate = loader.get_template("deployment/%s" % options['webserver'])
-        wsgitemplate = loader.get_template("deployment/wsgi.py")
+        servertemplate = loader.select_template(["deployment/%s" % options['webserver'],
+                                                 "deployment/default_%s" % options['webserver']])
+        wsgitemplate = loader.select_template(["deployment/wsgi.py",
+                                               "deployment/default_wsgi.py"])
         context = Context({"settings": settings,
                            "sys": sys, "os": os,
                            "options": options,
@@ -71,12 +80,15 @@ class Command(BaseCommand):
                            "wsgi_path": wsgi_path, },
                           autoescape=False)
 
+        if not settings.ALLOWED_HOSTS:
+            sys.stderr.write("settings.ALLOWED_HOSTS is empty, this is not going to go so well")
+
         with open(server_path, "wt") as f:
             f.write(servertemplate.render(context))
-            print "Wrote server config in %s" % server_path
+            print "Wrote server vhost in %s" % server_path
 
         with open(wsgi_path, "wt") as f:
             f.write(wsgitemplate.render(context))
             print "Wrote wsgi script in %s" % wsgi_path
 
-        print options
+        #print options

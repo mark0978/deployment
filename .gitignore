@@ -3,3 +3,5 @@ django_deployment.egg-info
 build
 dist
 .git
+*~
+#*#
