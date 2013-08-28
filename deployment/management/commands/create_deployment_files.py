@@ -1,5 +1,6 @@
 import os, sys
 import getpass
+
 from django.core.management.base import BaseCommand, CommandError
 from django.template import loader, Context
 from optparse import make_option
@@ -16,7 +17,7 @@ class Command(BaseCommand):
         make_option('--webserver',
                     default="apache",
                     dest="webserver",
-                    help='Which webserver to create deployment files for, [apache or nginx]'),
+                    help='Which webserver to create deployment files for [apache|nginx], defaults to apache.  Used in picking the vhost template'),
         make_option('--server-admin',
                     default=settings.ADMINS[0][1],
                     dest="server_admin",
@@ -24,11 +25,11 @@ class Command(BaseCommand):
         make_option('--processes',
                     default=5,
                     dest="processes",
-                    help='Number of processes to run'),
+                    help='Number of processes to run, ignored for windows'),
         make_option('--threads',
                     default=5,
                     dest="threads",
-                    help='Number of threads per process'),
+                    help='Number of threads per process, ignored for windows'),
         make_option('--server-name',
                     default=None,
                     dest="server_name",
@@ -39,8 +40,8 @@ class Command(BaseCommand):
                     dest="output_dir",
                     help="Name of the directory to write the deployment files in."),
         )
-    help = ("Creates deployment files for a mod_wsgi platform based on"
-            " templates in the deployment templates folder.")
+    help = ("\nCreates deployment files for a wsgi platform based on"
+            " templates in the deployment templates folder.\n")
 
 
     def handle(self, *args, **options):
