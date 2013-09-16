@@ -1,4 +1,4 @@
-{% load deployment_tags %}<VirtualHost *:80>
+{% load deployment_tags %}<VirtualHost *:{% if ssl %}443{% else %}80{% endif %}>
     ServerAdmin {{ options.server_admin }}
 
     {% block server-names %}
@@ -49,6 +49,12 @@
     {% endblock wsgi %}
 
     {% block ssl %}
+    {% if ssl %}
+       SSLEngine on
+       SSLCertificateFile    {{ ssl.certfile }}
+       SSLCertificateKeyFile {{ ssl.keyfile }}
+       {% if ssl.cacertfile %}SSLCACertificateFile  {{ ssl.cacertfile }}{% endif %}
+    {% endif %}
     {% endblock ssl %}
 
 </VirtualHost>

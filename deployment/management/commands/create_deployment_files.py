@@ -1,12 +1,16 @@
-import os, sys
+import os, sys, re
 import getpass
 
+import django
 from django.core.management.base import BaseCommand, CommandError
 from django.template import loader, Context
 from optparse import make_option
 from django.conf import settings
 
-PROJECT_NAME = settings.SETTINGS_MODULE.split('.')[0]
+try:
+    PROJECT_NAME = settings.SETTINGS_MODULE.split('.')[1]
+except IndexError:
+    PROJECT_NAME = ""
 
 class Command(BaseCommand):
     option_list = BaseCommand.option_list + (
@@ -39,11 +43,36 @@ class Command(BaseCommand):
                     default=None,
                     dest="output_dir",
                     help="Name of the directory to write the deployment files in."),
+        make_option('--ssl-dir',
+                    default=None,
+                    dest="ssl_dir",
+                    help="Name of the directory that contains your ssl key, cert and option ca cert files "),
         )
     help = ("\nCreates deployment files for a wsgi platform based on"
             " templates in the deployment templates folder.\n")
 
 
+    def find_ssl_files(self, dirname):
+        """ Scans dirname for files that look like certificate files to fill out the ssl
+        portion of the vhost file """
+        data = {}
+        re_key = re.compile(".+\\.key$")
+        re_cert = re.compile(".+\\.(cert|crt)$")
+        re_cacert = re.compile(".+\\.(ca\\.crt|ca\\.cert|ca-bundle)")
+        if dirname:
+            files = os.listdir(dirname)
+            for f in files:
+                if re_key.match(f):
+                    data["keyfile"] = os.path.abspath(os.path.join(dirname, f))
+                elif re_cacert.match(f):
+                    data["cacertfile"] = os.path.abspath(os.path.join(dirname, f))
+                elif re_cert.match(f):
+                    data["certfile"] = os.path.abspath(os.path.join(dirname, f))
+
+        #print "files=", files
+        #print "ssl=",data
+        return data
+            
     def handle(self, *args, **options):
 
         # Flesh out options with the name=value pairs from the command line
@@ -74,15 +103,21 @@ class Command(BaseCommand):
                                                  "deployment/default_%s" % options['webserver']])
         wsgitemplate = loader.select_template(["deployment/wsgi.py",
                                                "deployment/default_wsgi.py"])
+
+        if options["ssl_dir"] and not os.path.isdir(options["ssl_dir"]):
+            raise CommandError('%s is not a directory' % options["ssl_dir"])
+
         context = Context({"settings": settings,
                            "sys": sys, "os": os,
                            "options": options,
                            "username": getpass.getuser(),
-                           "wsgi_path": wsgi_path, },
+                           "wsgi_path": wsgi_path, 
+                           "ssl": self.find_ssl_files(options["ssl_dir"]),
+                           },
                           autoescape=False)
 
-        if not settings.ALLOWED_HOSTS:
-            sys.stderr.write("settings.ALLOWED_HOSTS is empty, this is not going to go so well")
+        if not settings.ALLOWED_HOSTS and django.get_version() >= '1.4.4':
+            raise CommandError("settings.ALLOWED_HOSTS is empty, this is not going to go so well")
 
         with open(server_path, "wt") as f:
             f.write(servertemplate.render(context))
