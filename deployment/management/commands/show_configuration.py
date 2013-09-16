@@ -33,8 +33,13 @@ class Command(BaseCommand):
                               "EMAIL_HOST", "EMAIL_SUBJECT_PREFIX",
                               "SESSION_COOKIE_SECURE", "DATABASES"]
         for arg in args:
-            display_params.append(arg)
+            if arg not in display_params:
+                display_params.append(arg)
 
+        print "DJANGO_SETTINGS_MODULE=%s" % os.environ["DJANGO_SETTINGS_MODULE"]
+        print "="*50
+
+        display_params.sort()
         for param in display_params:
             try:
                 print "%s: %s" % (param,
