@@ -1,4 +1,4 @@
-import os, sys, re
+import os, sys, re, importlib
 import getpass
 
 import django
@@ -17,6 +17,10 @@ except IndexError:
 
 class Command(BaseCommand):
     option_list = BaseCommand.option_list + (
+        make_option('--use-previous',
+                    default=False,
+                    dest="use_previous",
+                    help='Use previous settings to regenerate the deployment files.'),
         make_option('--file-prefix',
                     default=PROJECT_NAME,
                     dest="prefix",
@@ -45,7 +49,7 @@ class Command(BaseCommand):
         make_option('--output-dir',
                     default=None,
                     dest="output_dir",
-                    help="Name of the directory to write the deployment files in."),
+                    help="Name of the directory to write the deployment files in, defaults to the settings module dir/deploy"),
         make_option('--ssl-dir',
                     default=None,
                     dest="ssl_dir",
@@ -79,16 +83,15 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
 
-        if not args:
-            module = SettingsModule.objects.get(name=os.environ['DJANGO_SETTINGS_MODULE'])
+        if options.get('use_previous', False):
+            try:
+                module = SettingsModule.objects.get(name=os.environ['DJANGO_SETTINGS_MODULE'])
+            except SettingsModule.DoesNotExist:
+                raise CommandError("No saved settings to create deployment files with, please specify your options")
             cmdline = CommandLine.objects.filter(module=module).latest('when')
 
             args = cmdline.arguments
-            options = {}
-            for key, value in cmdline.options.items():
-                if value:
-                    options[key] = value
-
+            options = cmdline.options
 
             print "Creating deployment files with %s and %s" % (args, options)
 
@@ -120,7 +123,8 @@ class Command(BaseCommand):
             if output_dir:
                 output_dir = os.path.abspath(output_dir)
             else:
-                output_dir = os.path.abspath(os.path.join(settings.PROJECT_ROOT, "deploy"))
+                settings_module = importlib.import_module(os.environ['DJANGO_SETTINGS_MODULE'])
+                output_dir = os.path.abspath(os.path.join(os.path.dirname(settings_module.__file__), "deploy"))
 
             wsgi_path = os.path.join(output_dir, "%s_wsgi.py" % options['prefix'])
             server_path = os.path.join(output_dir, "%s_%s.vhost" % (options['prefix'], options['webserver']))
@@ -146,7 +150,7 @@ class Command(BaseCommand):
                 raise CommandError("settings.ALLOWED_HOSTS is empty, this is not going to go so well")
 
             def white_smush(intxt):
-                txt = re.sub('[\t ]*\r', '', intxt)
+                txt = re.sub('[\t ]*[\r\n]', '\n', intxt)
                 txt = re.sub('\n\n+', '\n', txt)
                 return re.sub('========+', '\n', txt)
 
