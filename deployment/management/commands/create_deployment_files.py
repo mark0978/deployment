@@ -3,9 +3,12 @@ import getpass
 
 import django
 from django.core.management.base import BaseCommand, CommandError
+from django.core.management import call_command
 from django.template import loader, Context
 from optparse import make_option
 from django.conf import settings
+
+from ...models import SettingsModule, CommandLine
 
 try:
     PROJECT_NAME = settings.SETTINGS_MODULE.split('.')[1]
@@ -56,75 +59,106 @@ class Command(BaseCommand):
         """ Scans dirname for files that look like certificate files to fill out the ssl
         portion of the vhost file """
         data = {}
-        re_key = re.compile(".+\\.key$")
-        re_cert = re.compile(".+\\.(cert|crt)$")
-        re_cacert = re.compile(".+\\.(ca\\.crt|ca\\.cert|ca-bundle)")
         if dirname:
-            files = os.listdir(dirname)
-            for f in files:
-                if re_key.match(f):
-                    data["keyfile"] = os.path.abspath(os.path.join(dirname, f))
-                elif re_cacert.match(f):
-                    data["cacertfile"] = os.path.abspath(os.path.join(dirname, f))
-                elif re_cert.match(f):
-                    data["certfile"] = os.path.abspath(os.path.join(dirname, f))
+            re_key = re.compile(".+\\.key$")
+            re_cert = re.compile(".+\\.(cert|crt)$")
+            re_cacert = re.compile(".+\\.(ca\\.crt|ca\\.cert|ca-bundle)")
+            if dirname:
+                files = os.listdir(dirname)
+                for f in files:
+                    if re_key.match(f):
+                        data["keyfile"] = os.path.abspath(os.path.join(dirname, f))
+                    elif re_cacert.match(f):
+                        data["cacertfile"] = os.path.abspath(os.path.join(dirname, f))
+                    elif re_cert.match(f):
+                        data["certfile"] = os.path.abspath(os.path.join(dirname, f))
 
-        #print "files=", files
-        #print "ssl=",data
+            #print "files=", files
+            #print "ssl=",data
         return data
-            
+
     def handle(self, *args, **options):
 
-        # Flesh out options with the name=value pairs from the command line
-        for arg in args:
-            if "=" in arg:
-                name, value = arg.split('=')
-                if name in options:
-                    oldvalue = options[name]
-                    if isinstance(oldvalue, list):
-                        oldvalue.append(value)
-                    else:
-                        options[name] = [oldvalue, value]
-                else:
-                    options[name] = [value]
-            # ignore those that don't have an equal in the string
+        if not args:
+            module = SettingsModule.objects.get(name=os.environ['DJANGO_SETTINGS_MODULE'])
+            cmdline = CommandLine.objects.filter(module=module).latest('when')
 
-        # Not done in the options, so I can put the abspath on it
-        output_dir = options["output_dir"]
-        if output_dir:
-            output_dir = os.path.abspath(output_dir)
+            args = cmdline.arguments
+            options = {}
+            for key, value in cmdline.options.items():
+                if value:
+                    options[key] = value
+
+
+            print "Creating deployment files with %s and %s" % (args, options)
+
         else:
-            output_dir = os.path.abspath(os.path.join(settings.PROJECT_ROOT, "deploy"))
+            module = SettingsModule.objects.get_or_create(name=os.environ['DJANGO_SETTINGS_MODULE'])[0]
+            cmdline = CommandLine(command="create_deployment_files", module=module, arguments=args,
+                                  options=options)
+            cmdline.save()
 
-        wsgi_path = os.path.join(output_dir, "%s_wsgi.py" % options['prefix'])
-        server_path = os.path.join(output_dir, "%s_%s.vhost" % (options['prefix'], options['webserver']))
+        self.do_work(*args, **options)
 
-        servertemplate = loader.select_template(["deployment/%s" % options['webserver'],
-                                                 "deployment/default_%s" % options['webserver']])
-        wsgitemplate = loader.select_template(["deployment/wsgi.py",
-                                               "deployment/default_wsgi.py"])
+    def do_work(self, *args, **options):
+            # Flesh out options with the name=value pairs from the command line
+            for arg in args:
+                if "=" in arg:
+                    name, value = arg.split('=')
+                    if name in options:
+                        oldvalue = options[name]
+                        if isinstance(oldvalue, list):
+                            oldvalue.append(value)
+                        else:
+                            options[name] = [oldvalue, value]
+                    else:
+                        options[name] = [value]
+                # ignore those that don't have an equal in the string
 
-        if options["ssl_dir"] and not os.path.isdir(options["ssl_dir"]):
-            raise CommandError('%s is not a directory' % options["ssl_dir"])
+            # Not done in the options, so I can put the abspath on it
+            output_dir = options["output_dir"]
+            if output_dir:
+                output_dir = os.path.abspath(output_dir)
+            else:
+                output_dir = os.path.abspath(os.path.join(settings.PROJECT_ROOT, "deploy"))
 
-        context = Context({"settings": settings,
-                           "sys": sys, "os": os,
-                           "options": options,
-                           "username": getpass.getuser(),
-                           "wsgi_path": wsgi_path, 
-                           "ssl": self.find_ssl_files(options["ssl_dir"]),
-                           },
-                          autoescape=False)
+            wsgi_path = os.path.join(output_dir, "%s_wsgi.py" % options['prefix'])
+            server_path = os.path.join(output_dir, "%s_%s.vhost" % (options['prefix'], options['webserver']))
 
-        if not settings.ALLOWED_HOSTS and django.get_version() >= '1.4.4':
-            raise CommandError("settings.ALLOWED_HOSTS is empty, this is not going to go so well")
+            servertemplate = loader.select_template(["deployment/%s" % options['webserver'],
+                                                     "deployment/default_%s" % options['webserver']])
+            wsgitemplate = loader.select_template(["deployment/wsgi.pytemplate",
+                                                   "deployment/default_wsgi.pytemplate"])
 
-        with open(server_path, "wt") as f:
-            f.write(servertemplate.render(context))
-            print "Wrote server vhost in %s" % server_path
+            if options.get("ssl_dir", None) and not os.path.isdir(options["ssl_dir"]):
+                raise CommandError('%s is not a directory' % options["ssl_dir"])
 
-        with open(wsgi_path, "wt") as f:
-            f.write(wsgitemplate.render(context))
-            print "Wrote wsgi script in %s" % wsgi_path
+            context = Context({"settings": settings,
+                               "sys": sys, "os": os,
+                               "options": options,
+                               "username": getpass.getuser(),
+                               "wsgi_path": wsgi_path,
+                               "ssl": self.find_ssl_files(options.get("ssl_dir", None)),
+                               },
+                              autoescape=False)
 
-        #print options
+            if not settings.ALLOWED_HOSTS and django.get_version() >= '1.4.4':
+                raise CommandError("settings.ALLOWED_HOSTS is empty, this is not going to go so well")
+
+            def white_smush(intxt):
+                txt = re.sub('[\t ]*\r', '', intxt)
+                txt = re.sub('\n\n+', '\n', txt)
+                return re.sub('========+', '\n', txt)
+
+            def undent(intxt):
+                return re.sub('\n +', '\n    ', intxt)
+
+            with open(server_path, "wt") as f:
+                f.write(undent(white_smush(servertemplate.render(context))))
+                print "Wrote server vhost in %s" % server_path
+
+            with open(wsgi_path, "wt") as f:
+                f.write(white_smush(wsgitemplate.render(context)))
+                print "Wrote wsgi script in %s" % wsgi_path
+
+            #print options
