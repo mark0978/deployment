@@ -6,21 +6,14 @@ Requirements
 
 ``django-deployment`` requires Django 1.0 or later.  The application is intended
 work with any versions of the Django framework, but has only been tested with
-1.4 and above.
+1.5 and above.
 
 Installation
 ============
 
 Download ``django-deployment`` using **one** of the following methods:
 
-easy_install
-------------
-
-You can download the package from the `CheeseShop <http://pypi.python.org/pypi/django-deployment/>`_ or use::
-
-    easy_install django-deployment
-
-to download and install ``django-deployment``.
+pip install git+git://github.com/mark0978/django-deployment.git
 
 Package Download
 ----------------
