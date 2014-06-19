@@ -1,5 +1,4 @@
 from django.db import models
-from django.utils import timezone
 from django_extensions.db.fields.json import JSONField
 
 
@@ -9,7 +8,7 @@ class SettingsModule(models.Model):
 class CommandLine(models.Model):
     command = models.CharField(max_length=64)
     module = models.ForeignKey(SettingsModule)
-    when = models.DateTimeField(default=timezone.now())
+    when = models.DateTimeField(auto_now_add=True)
     arguments = JSONField()
     options = JSONField()
 

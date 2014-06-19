@@ -1,4 +1,4 @@
-import os, sys, re, importlib
+import os, sys, re, importlib, optparse
 import getpass
 
 import django
@@ -19,6 +19,7 @@ class Command(BaseCommand):
     option_list = BaseCommand.option_list + (
         make_option('--use-previous',
                     default=False,
+                    action="store_true",
                     dest="use_previous",
                     help='Use previous settings to regenerate the deployment files.'),
         make_option('--file-prefix',
@@ -41,11 +42,6 @@ class Command(BaseCommand):
                     default=5,
                     dest="threads",
                     help='Number of threads per process, ignored for windows'),
-        make_option('--server-name',
-                    default=None,
-                    dest="server_name",
-                    help="Don't use this with Django >1.4, settings.ALLOWED_HOSTS will be automatically used."\
-                        "For older versions, the name of the host for virtual host setups"),
         make_option('--output-dir',
                     default=None,
                     dest="output_dir",
@@ -81,25 +77,66 @@ class Command(BaseCommand):
             #print "ssl=",data
         return data
 
+    def _remove_defaults(self, options):
+        """ Return a dict of the options that are NOT default """
+        opts = {}
+        for option in Command.option_list:
+            if ((optparse.NO_DEFAULT == option.default and options[option.dest])
+                or (optparse.NO_DEFAULT != option.default
+                    and option.default != options[option.dest])):
+                opts[option.dest] = options[option.dest]
+
+        return opts
+
+    def cmdline(self, args, options):
+        """ Format the options as as string to print out """
+        arguments = []
+        cleanopts = self._remove_defaults(options)
+        for option in Command.option_list:
+            if option.dest in cleanopts:
+                if option.takes_value():
+                    argument = "%s=%s" % (option.get_opt_string(), cleanopts[option.dest])
+                else:
+                    argument = option.get_opt_string()
+                if " " in argument:
+                    argument = "'%s'" % argument
+
+                arguments.append(argument)
+
+        return " ".join(arguments)
+
     def handle(self, *args, **options):
 
+        save_cmdline = False
         if options.get('use_previous', False):
             try:
                 module = SettingsModule.objects.get(name=os.environ['DJANGO_SETTINGS_MODULE'])
             except SettingsModule.DoesNotExist:
-                raise CommandError("No saved settings to create deployment files with, please specify your options")
+                raise CommandError("No saved settings to create deployment files with, please "\
+                                   "specify your options")
             cmdline = CommandLine.objects.filter(module=module).latest('when')
 
-            args = cmdline.arguments
-            options = cmdline.options
+            # Hopefully the same name=value pair will overwrite the previous one
+            cmdline.arguments += list(args)
 
-            print "Creating deployment files with %s and %s" % (args, options)
+            cmdline.options.update(self._remove_defaults(options))
+
+            # This is not completely accurate, revisit at a later point
+            print "Invoking as if you used:\n%s" % self.cmdline(cmdline.arguments, cmdline.options)
+
+            if len(sys.argv) > 3:
+                del cmdline.options['use_previous']
+                args = cmdline.arguments
+                options = cmdline.options
+                save_cmdline = True
 
         else:
+            save_cmdline = True
+
+        if save_cmdline:
             module = SettingsModule.objects.get_or_create(name=os.environ['DJANGO_SETTINGS_MODULE'])[0]
-            cmdline = CommandLine(command="create_deployment_files", module=module, arguments=args,
-                                  options=options)
-            cmdline.save()
+            cmdline = CommandLine.objects.create(command="create_deployment_files", module=module,
+                                                 arguments=list(args), options=options)
 
         self.do_work(*args, **options)
 
@@ -137,12 +174,17 @@ class Command(BaseCommand):
             if options.get("ssl_dir", None) and not os.path.isdir(options["ssl_dir"]):
                 raise CommandError('%s is not a directory' % options["ssl_dir"])
 
+            using_ssl = self.find_ssl_files(options.get("ssl_dir", None))
+            if using_ssl and not settings.SESSION_COOKIE_SECURE:
+                raise CommandError("Trying to use ssl without settings.SESSION_COOKIE_SECURE is a"
+                                   "bad idea.  Go fish!")
+
             context = Context({"settings": settings,
                                "sys": sys, "os": os,
                                "options": options,
                                "username": getpass.getuser(),
                                "wsgi_path": wsgi_path,
-                               "ssl": self.find_ssl_files(options.get("ssl_dir", None)),
+                               "ssl": using_ssl,
                                },
                               autoescape=False)
 
