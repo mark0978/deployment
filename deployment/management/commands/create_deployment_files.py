@@ -15,44 +15,51 @@ try:
 except IndexError:
     PROJECT_NAME = ""
 
+def safe_mkdir(dirname):
+    """ Create dirname if it doesn't exist.  If it does, just return, any other error passes the
+          exception to the caller to deal with. (or not)"""
+    try:
+        os.mkdir(dirname)
+    except FileExistsError:
+        pass
+
 class Command(BaseCommand):
-    option_list = BaseCommand.option_list + (
-        make_option('--use-previous',
-                    default=False,
-                    action="store_true",
-                    dest="use_previous",
-                    help='Use previous settings to regenerate the deployment files.'),
-        make_option('--file-prefix',
-                    default=PROJECT_NAME,
-                    dest="prefix",
-                    help='First part of the deployment file names, {prefix}_{webserver}.vhost and {prefix}_wsgi.py'),
-        make_option('--webserver',
-                    default="apache",
-                    dest="webserver",
-                    help='Which webserver to create deployment files for [apache|nginx], defaults to apache.  Used in picking the vhost template'),
-        make_option('--server-admin',
-                    default=settings.ADMINS[0][1],
-                    dest="server_admin",
-                    help='Email address of the server admin for the vhost file'),
-        make_option('--processes',
-                    default=5,
-                    dest="processes",
-                    help='Number of processes to run, ignored for windows'),
-        make_option('--threads',
-                    default=5,
-                    dest="threads",
-                    help='Number of threads per process, ignored for windows'),
-        make_option('--output-dir',
-                    default=None,
-                    dest="output_dir",
-                    help="Name of the directory to write the deployment files in, defaults to the settings module dir/deploy"),
-        make_option('--ssl-dir',
-                    default=None,
-                    dest="ssl_dir",
-                    help="Name of the directory that contains your ssl key, cert and option ca cert files "),
-        )
-    help = ("\nCreates deployment files for a wsgi platform based on"
-            " templates in the deployment templates folder.\n")
+    def add_arguments(self, parser):
+        parser.add_argument('--use-previous',
+                            default=False,
+                            action="store_true",
+                            dest="use_previous",
+                            help='Use previous settings to regenerate the deployment files.'),
+        parser.add_argument('--file-prefix',
+                            default=PROJECT_NAME,
+                            dest="prefix",
+                            help='First part of the deployment file names, {prefix}_{webserver}.vhost and {prefix}_wsgi.py'),
+        parser.add_argument('--webserver',
+                            default="apache",
+                            dest="webserver",
+                            help='Which webserver to create deployment files for [apache|nginx], defaults to apache.  Used in picking the vhost template'),
+        parser.add_argument('--server-admin',
+                            default=settings.ADMINS[0][1],
+                            dest="server_admin",
+                            help='Email address of the server admin for the vhost file'),
+        parser.add_argument('--processes',
+                            default=5,
+                            dest="processes",
+                            help='Number of processes to run, ignored for windows'),
+        parser.add_argument('--threads',
+                            default=5,
+                            dest="threads",
+                            help='Number of threads per process, ignored for windows'),
+        parser.add_argument('--output-dir',
+                            default=None,
+                            dest="output_dir",
+                            help="Name of the directory to write the deployment files in, defaults to the settings module dir/deploy"),
+        parser.add_argument('--ssl-dir',
+                            default=None,
+                            dest="ssl_dir",
+                            help="Name of the directory that contains your ssl key, cert and option ca cert files "),
+        help = ("\nCreates deployment files for a wsgi platform based on"
+                " templates in the deployment templates folder.\n")
 
 
     def find_ssl_files(self, dirname):
@@ -122,7 +129,8 @@ class Command(BaseCommand):
             cmdline.options.update(self._remove_defaults(options))
 
             # This is not completely accurate, revisit at a later point
-            print "Invoking as if you used:\n%s" % self.cmdline(cmdline.arguments, cmdline.options)
+            sys.stdout.write("Invoking as if you used:\n%s\n" 
+                             % self.cmdline(cmdline.arguments, cmdline.options))
 
             if len(sys.argv) > 3:
                 del cmdline.options['use_previous']
@@ -199,12 +207,15 @@ class Command(BaseCommand):
             def undent(intxt):
                 return re.sub('\n +', '\n    ', intxt)
 
+            safe_mkdir(os.path.dirname(server_path))
             with open(server_path, "wt") as f:
                 f.write(undent(white_smush(servertemplate.render(context))))
-                print "Wrote server vhost in %s" % server_path
+                sys.stdout.write("Wrote server vhost in %s\n" % server_path)
 
+
+            safe_mkdir(os.path.dirname(wsgi_path))
             with open(wsgi_path, "wt") as f:
                 f.write(white_smush(wsgitemplate.render(context)))
-                print "Wrote wsgi script in %s" % wsgi_path
+                sys.stdout.write("Wrote wsgi script in %s\n" % wsgi_path)
 
             #print options
