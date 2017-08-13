@@ -81,6 +81,23 @@ class Command(BaseCommand):
                     elif re_cert.match(f):
                         data["certfile"] = os.path.abspath(os.path.join(dirname, f))
 
+                if len(data) == 0:
+                    # Lets Encrypt maybe?
+                    # cert.pem       chain.pem      fullchain.pem  privkey.pem
+                    self.stdout.write("Trying LetsEncrypt Keys instead\n")
+                    re_key = re.compile("^privkey.pem$")
+                    re_cert = re.compile("^cert.pem$")
+                    re_cacert = re.compile("^fullchain.pem$")
+                    if dirname:
+                        files = os.listdir(dirname)
+                        for f in files:
+                            if re_key.match(f):
+                                data["keyfile"] = os.path.abspath(os.path.join(dirname, f))
+                            elif re_cacert.match(f):
+                                data["cacertfile"] = os.path.abspath(os.path.join(dirname, f))
+                            elif re_cert.match(f):
+                                data["certfile"] = os.path.abspath(os.path.join(dirname, f))
+                    
             #print "files=", files
             #print "ssl=",data
         return data
@@ -130,8 +147,8 @@ class Command(BaseCommand):
             cmdline.options.update(self._remove_defaults(options))
 
             # This is not completely accurate, revisit at a later point
-            sys.stdout.write("Invoking as if you used:\n%s\n" 
-                             % self.cmdline(cmdline.arguments, cmdline.options))
+            self.stdout.write("Invoking as if you used:\n%s\n" 
+                              % self.cmdline(cmdline.arguments, cmdline.options))
 
             if len(sys.argv) > 3:
                 del cmdline.options['use_previous']
@@ -214,12 +231,12 @@ class Command(BaseCommand):
             safe_mkdir(os.path.dirname(server_path))
             with open(server_path, "wt") as f:
                 f.write(undent(white_smush(servertemplate.render(context))))
-                sys.stdout.write("Wrote server vhost in %s\n" % server_path)
+                self.stdout.write("Wrote server vhost in %s\n" % server_path)
 
 
             safe_mkdir(os.path.dirname(wsgi_path))
             with open(wsgi_path, "wt") as f:
                 f.write(white_smush(wsgitemplate.render(context)))
-                sys.stdout.write("Wrote wsgi script in %s\n" % wsgi_path)
+                self.stdout.write("Wrote wsgi script in %s\n" % wsgi_path)
 
             #print options
