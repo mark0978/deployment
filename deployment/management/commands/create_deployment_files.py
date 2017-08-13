@@ -4,7 +4,8 @@ import getpass
 import django
 from django.core.management.base import BaseCommand, CommandError
 from django.core.management import call_command
-from django.template import loader, Context
+from django.template.backends.django import Engine
+from django.template import Context
 from optparse import make_option
 from django.conf import settings
 
@@ -174,9 +175,13 @@ class Command(BaseCommand):
             wsgi_path = os.path.join(output_dir, "%s_wsgi.py" % options['prefix'])
             server_path = os.path.join(output_dir, "%s_%s.vhost" % (options['prefix'], options['webserver']))
 
-            servertemplate = loader.select_template(["deployment/%s" % options['webserver'],
+            engine = Engine(dirs=settings.TEMPLATES[0]['DIRS'], 
+                            app_dirs=True, debug=settings.DEBUG, autoescape=False,
+                            libraries={'deployment_tags': 'deployment.templatetags.deployment_tags'})
+
+            servertemplate = engine.select_template(["deployment/%s" % options['webserver'],
                                                      "deployment/default_%s" % options['webserver']])
-            wsgitemplate = loader.select_template(["deployment/wsgi.pytemplate",
+            wsgitemplate = engine.select_template(["deployment/wsgi.pytemplate",
                                                    "deployment/default_wsgi.pytemplate"])
 
             if options.get("ssl_dir", None) and not os.path.isdir(options["ssl_dir"]):
@@ -188,13 +193,12 @@ class Command(BaseCommand):
                                    "bad idea.  Go fish!")
 
             context = Context({"settings": settings,
-                               "sys": sys, "os": os,
-                               "options": options,
-                               "username": getpass.getuser(),
-                               "wsgi_path": wsgi_path,
-                               "ssl": using_ssl,
-                               },
-                              autoescape=False)
+                       "sys": sys, "os": os,
+                       "options": options,
+                       "username": getpass.getuser(),
+                       "wsgi_path": wsgi_path,
+                       "ssl": using_ssl,
+                       }, autoescape=False)
 
             if not settings.ALLOWED_HOSTS and django.get_version() >= '1.4.4':
                 raise CommandError("settings.ALLOWED_HOSTS is empty, this is not going to go so well")
